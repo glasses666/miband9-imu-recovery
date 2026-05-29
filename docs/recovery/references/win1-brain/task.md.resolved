@@ -1,0 +1,109 @@
+# Task Checklist - Mi Band 9 IMU Data Capture
+
+## Normal BLE Analysis
+- [-] **Logcat Monitoring (Gadgetbridge Legacy)**
+    - [-] Capture high-frequency IMU data via RFCOMM Channel 5 (Abandoned, max 50Hz limit)
+    - [x] Recover previous RFCOMM script and commands
+    - [x] Force BT_CLASSIC connection in Gadgetbridge
+    - [x] Implement [sendRawBytes](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppSupport.java#352-363) in Xiaomi Support
+    - [x] Inject "Golden Key" `CMD_INIT`
+- [x] **Phase 2: Bluetooth Protocol Reverse Engineering**
+    - [x] Extract `device_db` to get Auth Key and MAC (Success)
+    - [x] Capture Bluetooth HCI logs ([btsnoop_hci.log](file://<private-windows-artifacts>/2025-12/miband9-imu/btsnoop_hci.log)) (Success)
+    - [x] Develop pure Python BTSnoop parser (Success)
+    - [/] Identify "Golden Key" to enable Gyroscope (Candidate found in RFCOMM DLCI 10)
+    - [x] **Live Capture Attempt**: Frida Hooking (Failed: Phone Crashed)
+    - [ ] **[PIVOT]** Advanced Offline Log Analysis (Bi-directional decoding)
+- [ ] **Data Decoding & Integration**
+    - [ ] Decode IMU response packets from [btsnoop_hci.log](file://<private-windows-artifacts>/2025-12/miband9-imu/btsnoop_hci.log)
+    - [ ] Implement Protobuf decoder for 6-axis data
+    - [ ] Integrate into [imu_visualizer.py](file://<private-windows-artifacts>/2025-12/imu_visualizer.py)
+- [ ] **Firmware Analysis**
+  - [x] Find Base Address (0x1FBC0000) <!-- id: 5 -->
+  - [x] Search for "Debug Mode" Strings
+    - [x] Found `set_work_mode` (Confirmed as Touch Panel Debug, NOT IMU)
+    - [x] Found `lsm6dso_enable_acc_gyro` (Likely function name, no direct XREF)
+  - [x] Fuzzing Data Channel
+    - [x] OpCode Fuzzing (Failed)
+    - [x] Payload Fuzzing (Failed)
+    - [x] Text Command Fuzzing (Failed)
+  - [ ] **[PIVOT]** Stop Fuzzing "set_work_mode" (Dead End)
+- [x] **Plan A: Vela Quick App Development**
+  - [x] Create [manifest.json](file://<private-windows-artifacts>/2025-12/miband9-imu-vela/manifest.json) and add `system.sensor`/`system.interconnect`
+  - [x] Implement `subscribeAccelerometer` (Game Mode ~25Hz -> Optimized to 50Hz)
+  - [x] **Optimization**: Batch sending and UI throttle for 50Hz (Implemented)
+  - [x] **Interconnect**: Change package to `com.xiaomi.xms.wearable.demo`
+  - [ ] User Build and Deploy [rpk](file://<private-windows-artifacts>/2025-12/miband9-imu-vela/dist/com.glasser.imustreamer.debug.1.0.0.rpk) to Device
+- [x] **IMU Data Visualization (New Stage)**
+  - [x] Create [imu_visualizer.py](file://<private-windows-artifacts>/2025-12/imu_visualizer.py) (3D + Waveform)
+  - [x] Install Python dependencies
+  - [x] **Refinement**: Swapped dimensions for correct Mi Band shape
+  - [ ] User testing and final validation
+- [x] **Android Companion App (Plan B Helper)**
+  - [x] Locate Official Interconnect Demo
+  - [x] Instrument Demo code with Log output (`android.util.Log.d("IMU_DATA", msg)`)
+  - [x] Compile Demo App with Java 11 (jdk-11.0.16.1)
+  - [ ] Deploy APK to Phone
+  - [ ] Verify Data Flow: Band -> Interconnect -> Android Log -> PC CSV
+- [ ] **Service Discovery (nRF Connect - Authenticated)**
+    - [ ] Identify services beyond standard ones (FEE0, FEE1)
+    - [ ] Look for high-throughput characteristics (Notify/Indicate)
+    - [-] Search for IMU-related protobuf messages in authenticated channel
+        - [x] Add [port](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/devices/xiaomi/XiaomiCoordinator.java#619-622) support to `BtBRQueue`
+        - [x] Re-verify Golden Key on Channel 5
+    - [-] Implement IMU Data Parsing (Paused)
+        - [-] Create `ImuDebugActivity` UI (Paused)
+        - [-] Implement broadcasting in [XiaomiSppSupport](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppSupport.java#47-432) (Paused)
+        - [-] Add decoding logic for packet Type 3 (Paused)
+    - [ ] **PC-Side Data Forwarding (New Priority)**
+        - [x] Ensure [ADB](file://<private-windows-artifacts>/2025-12/imu_visualizer.py#22-53) logcat output is reliable for `MI_IMU_RAW_RX`
+        - [x] Create [live_imu_forwarder.py](file://<private-agent-workspace>/live_imu_forwarder.py) to drain logcat and decode on PC
+    - [x] **PC Hot-Update Command System (NEW)**
+        - [x] Add `BroadcastReceiver` in APP to listen for ADB commands
+        - [x] Create [send_imu_cmd.py](file://<private-agent-workspace>/send_imu_cmd.py) to send custom hex via ADB
+        - [x] Test different CMD_INIT parameters without re-installing
+    - [ ] **Data Flow Debugging & Optimization**
+        - [ ] Quantify current sampling rate in [live_imu_forwarder.py](file://<private-agent-workspace>/live_imu_forwarder.py)
+        - [ ] Experiment with CMD_INIT parameters for high frequency
+    - [ ] **Implement Stream Heartbeat**
+        - [ ] Add periodic `KeepAlive` mechanism in [XiaomiSppSupport](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppSupport.java#47-432)
+        - [ ] Determine correct heartbeat payload (re-send Init? or 0x00?)
+        - [ ] Add Heartbeat timer
+        - [ ] Calculate and log Sampling Rate
+
+## Vela / HyperOS App Development (PAUSED - Unstable Environment)
+- [-] **Environment Setup**
+    - [x] Install **Xiaomi AIoT IDE**
+    - [x] Create "Hello World" Vela Project
+    - [x] Verify compilation workflow ([.rpk](file://<private-windows-artifacts>/2025-12/miband9-imu-vela/dist/com.glasser.imustreamer.debug.1.0.0.rpk) generated)
+    - [-] **Emulator Crash**: Persistent crashes when running app, blocked progress.
+- [-] **App Development Strategy A: JS Fuzzing** (Paused)
+- [-] **Data Transmission** (Paused)
+
+## Firmware Analysis (New Strategy)
+- [ ] **Firmware Acquisition**
+    - [ ] Locate Mi Band 9 Firmware file ([.bin](file://<private-windows-artifacts>/2025-12/miband9-imu/sensor_dump.bin))
+    - [ ] Identify Firmware Header / Compression (BesTechnic Format?)
+- [x] **Reverse Engineering**
+    - [x] Search for Sensor Configuration Strings (Found [lsm6dso](file://<private-agent-workspace>/scan_lsm6dso_code.py#8-34), `bmi270`, `ACC_ODR`)
+    - [x] **Found CMD Header**: `02 01 03 00` at `0x5C172F`
+    - [x] **Found ODR Config**: `10 30` (52Hz) and `10 40` (104Hz) in [vela_ap.bin](file://<private-windows-artifacts>/2025-12/miband9-imu/firmware_extract/vela_ap.bin)
+    - [x] **Firmware Patched**: Replaced 52Hz with 208Hz -> `miband9_imu_mod_208hz.zip`
+    - [x] **Base Address Discovered**: `0x1FBC0000` (via Pointer Table Analysis)
+    - [ ] **Next Step**: Search for "Developer Mode" / Hidden Debug Flags (Scanning for XREFs)
+    - [ ] **Goal**: Establish a reliable custom data pipeline
+
+- [ ] **PC Hot-Update Command System**
+    - [x] Add `BroadcastReceiver` in APP to listen for ADB commands
+    - [x] Create [send_imu_cmd.py](file://<private-agent-workspace>/send_imu_cmd.py) to send custom hex via ADB
+    - [x] **Hook Receiver**: Added [registerPcCommandReceiver](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java#409-445) to [connect()](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/impl/GBDeviceService.java#131-135)
+    - [x] Rebuild & Install APK (Success)
+    - [ ] Test different CMD parameters (`--preset fast`)
+
+- [ ] **Investigate GameSir Mode Trigger**
+    - [/] Analyze official app HCI logs for SPP/RFCOMM `A5A5` patterns (Done, no match)
+    - [/] Implement a "Force BLE Pair" then "Re-scan" sequence in Gadgetbridge
+        - [x] Modify [onTestNewFunction](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java#286-321) to perform BLE connect/disconnect sequence (Implemented GameSir Trigger)
+        - [x] Build and install debug APK (Build Success)
+        - [ ] Verify if GameSir mode appears in system Bluetooth scan
+    - [ ] Check if specific SPP commands trigger the personality change to GameSir-Nova Pro

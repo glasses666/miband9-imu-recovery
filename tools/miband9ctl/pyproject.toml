@@ -1,0 +1,12 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "miband9ctl"
+version = "0.1.0"
+description = "Headless CLI harness for Mi Band 9 HF IMU experiments"
+requires-python = ">=3.9"
+
+[project.scripts]
+miband9ctl = "miband9ctl.cli:main"

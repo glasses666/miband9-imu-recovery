@@ -1,0 +1,50 @@
+# Mi Band 9 IMU High-Frequency Data Extraction - Phase 2 Summary
+
+## 1. Pivot to Firmware Analysis
+Shifted focus from VelaOS App development (due to emulator instability) to direct Firmware Reverse Engineering of [vela_ap.bin](file://<private-windows-artifacts>/2025-12/miband9-imu/firmware_extract/vela_ap.bin) (HyperOS / NuttX based).
+
+## 2. Key Discoveries in Firmware ([vela_ap.bin](file://<private-windows-artifacts>/2025-12/miband9-imu/firmware_extract/vela_ap.bin))
+
+### A. Sensor Drivers Identified
+- **LSM6DSO** (STMicroelectronics) and **BMI270** (Bosch) drivers found.
+- String references: `lsm6dso_factory_test`, `ACC_ODR`, `sensor interval`.
+
+### B. ODR (Output Data Rate) Configuration Found
+We located the specific I2C/SPI register write sequences for the LSM6DSO sensor (Register `0x10` - CTRL1_XL):
+- **52Hz Mode (`0x30`)**: Found 50+ times in the binary (offsets `0x1AB0`, `0x20xxxx`...), likely the system default.
+- **104Hz Mode (`0x40`)**: Found ~10 times in early boot/high-perf sections (offsets `0x4B4`, `0x1670`).
+- **Conclusion**: The hardware and firmware *supports* >100Hz, but it's software-locked to 50Hz for standard apps.
+
+### C. "Factory Mode" Clues
+Found strings suggesting a hidden debug mode that might stream raw data:
+- `ENUM_MODE_DEBUG_RAWDATA`
+- `lsm6dso_factory_test`
+- `get_factory_test_result`
+
+## 3. Tooling & Infrastructure
+
+### A. Real-time Monitoring
+- **[live_imu_forwarder.py](file://<private-agent-workspace>/live_imu_forwarder.py)**: Monitors ADB Logcat for `MI_IMU_RAW_RX` pattern. Decodes raw bytes and calculates real-time Hz.
+
+### B. PC command Injection (Hot-Update)
+- **Gadgetbridge Mod**: Injected [registerPcCommandReceiver()](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java#409-445) into [XiaomiSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java) to allow sending raw hex commands via ADB without rebuilding the app.
+- **[send_imu_cmd.py](file://<private-agent-workspace>/send_imu_cmd.py)**:
+    - Implemented **Xiaomi A5 Protocol CRC16** checksum calculation (crucial fix).
+    - Can construct valid [SessionConfig](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppPacketV2.java#87-255) packets.
+    - Supports Fuzzing OpCodes (`--opcode`).
+
+### C. Firmware Patching
+- **[patch_firmware.py](file://<private-agent-workspace>/patch_firmware.py)**:
+    - Scans [vela_ap.bin](file://<private-windows-artifacts>/2025-12/miband9-imu/firmware_extract/vela_ap.bin) for all `10 30` (52Hz) byte sequences.
+    - Replaces them with `10 50` (208Hz).
+    - **Result**: generated `vela_ap_patched_208hz.bin`, ready for repackaging and flashing.
+
+## 4. Current State & Options
+
+| Strategy | Status | Next Step |
+| :--- | :--- | :--- |
+| **Strategy A: Soft Unlock** | Tools Ready | Fuzz OpCodes via [send_imu_cmd.py](file://<private-agent-workspace>/send_imu_cmd.py) to trigger `ENUM_MODE_DEBUG_RAWDATA`. |
+| **Strategy B: Hard Patch** | **Patch Ready** | Flash `miband9_imu_mod_208hz.zip` using Notify App. |
+
+## 5. Next Objective
+Investigate how to trigger **Factory/Developer Mode** via software commands to enable legitimate data streaming pipes without permanent firmware patching.
