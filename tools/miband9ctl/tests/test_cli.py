@@ -7,6 +7,7 @@ from miband9ctl.cli import (
     normalize_global_args,
     parse_bluetooth_manager_dump,
     parse_connect_log,
+    parse_find_band_log,
     parse_gamesir_probe_log,
     parse_known_devices_log,
     parse_package_dump,
@@ -42,6 +43,7 @@ class CliParsingTest(unittest.TestCase):
         band_pair = parser.parse_args(normalize_global_args(["band", "pair", "--address", "AA:BB:CC:DD:EE:02", "--json"]))
         band_connect = parser.parse_args(normalize_global_args(["band", "connect", "--address", "AA:BB:CC:DD:EE:02", "--json"]))
         band_port_probe = parser.parse_args(normalize_global_args(["band", "port-probe", "--address", "AA:BB:CC:DD:EE:02", "--ports", "1-5,7", "--hex", "A5A5", "--connect-timeout-ms", "1000", "--read-ms", "250", "--disconnect-first", "--json"]))
+        band_find_band = parser.parse_args(normalize_global_args(["band", "find-band", "--address", "AA:BB:CC:DD:EE:02", "--duration-ms", "2500", "--json"]))
         band_gamesir_probe = parser.parse_args(normalize_global_args(["band", "gamesir-probe", "--seconds", "5", "--name", "GameSir,Nova", "--address", "AA:BB:CC:DD:EE:02", "--capture-ms", "4000", "--handshake", "--bond", "--historical-010103", "--json"]))
         band_sport_xms_probe = parser.parse_args(normalize_global_args(["band", "sport-xms-probe", "--capture-ms", "600000", "--start", "--sport-type", "812", "--did", "DID-REDACTED", "--json"]))
         band_bind = parser.parse_args(normalize_global_args(["band", "bind", "--address", "AA:BB:CC:DD:EE:02", "--reset-bond", "--json"]))
@@ -63,6 +65,9 @@ class CliParsingTest(unittest.TestCase):
         self.assertEqual(1000, band_port_probe.connect_timeout_ms)
         self.assertEqual(250, band_port_probe.read_ms)
         self.assertTrue(band_port_probe.disconnect_first)
+        self.assertEqual(("band", "find-band"), (band_find_band.cmd, band_find_band.band_cmd))
+        self.assertEqual("AA:BB:CC:DD:EE:02", band_find_band.address)
+        self.assertEqual(2500, band_find_band.duration_ms)
         self.assertEqual(("band", "gamesir-probe"), (band_gamesir_probe.cmd, band_gamesir_probe.band_cmd))
         self.assertEqual(5, band_gamesir_probe.seconds)
         self.assertEqual("GameSir,Nova", band_gamesir_probe.name)
@@ -269,6 +274,42 @@ mSnoopLogSettingAtEnable = false
                 ],
             },
             parse_port_probe_log(log),
+        )
+
+    def test_parse_find_band_log_extracts_start_stop_gate_marker(self):
+        log = (
+            'I/MI_HFIMU_STATE(123): '
+            '{"status":"ok","command":"find-band","message":"find_started",'
+            '"requested_address":"AA:BB:CC:DD:EE:02","address":"AA:BB:CC:DD:EE:02",'
+            '"name":"Xiaomi Smart Band 9 808F","duration_ms":"2500",'
+            '"device_state":"INITIALIZED","state_ordinal":"9","initialized":"true"}\n'
+            'I/MI_HFIMU_STATE(123): '
+            '{"status":"ok","command":"find-band","message":"find_stopped",'
+            '"requested_address":"AA:BB:CC:DD:EE:02","address":"AA:BB:CC:DD:EE:02",'
+            '"name":"Xiaomi Smart Band 9 808F","duration_ms":"2500",'
+            '"device_state":"INITIALIZED","state_ordinal":"9","initialized":"true"}\n'
+            'I/MI_HFIMU_STATE(123): '
+            '{"status":"ok","command":"find-band","message":"find_complete",'
+            '"requested_address":"AA:BB:CC:DD:EE:02","address":"AA:BB:CC:DD:EE:02",'
+            '"name":"Xiaomi Smart Band 9 808F","duration_ms":"2500",'
+            '"device_state":"INITIALIZED","state_ordinal":"9","initialized":"true"}'
+        )
+        self.assertEqual(
+            {
+                "status": "ok",
+                "message": "find_complete",
+                "requested_address": "AA:BB:CC:DD:EE:02",
+                "address": "AA:BB:CC:DD:EE:02",
+                "name": "Xiaomi Smart Band 9 808F",
+                "duration_ms": 2500,
+                "device_state": "INITIALIZED",
+                "state_ordinal": "9",
+                "initialized": True,
+                "reason": "",
+                "started": True,
+                "stopped": True,
+            },
+            parse_find_band_log(log),
         )
 
     def test_parse_gamesir_probe_log_extracts_state_matrix(self):

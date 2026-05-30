@@ -26,6 +26,7 @@ public final class HfImuCliContract {
     public static final String EXTRA_PORT = "port";
     public static final String EXTRA_CAPTURE_MS = "capture_ms";
     public static final String EXTRA_MAX_PACKETS = "max_packets";
+    public static final String EXTRA_FIND_DURATION_MS = "find_duration_ms";
     public static final String EXTRA_GAMESIR_HANDSHAKE = "gamesir_handshake";
     public static final String EXTRA_GAMESIR_BOND = "gamesir_bond";
     public static final String EXTRA_GAMESIR_HISTORICAL_010103 = "gamesir_historical_010103";
@@ -44,6 +45,7 @@ public final class HfImuCliContract {
     public static final String COMMAND_CONNECT = "connect";
     public static final String COMMAND_PORT_PROBE = "port-probe";
     public static final String COMMAND_IMU_CAPTURE = "imu-capture";
+    public static final String COMMAND_FIND_BAND = "find-band";
     public static final String COMMAND_GAMESIR_PROBE = "gamesir-probe";
     public static final String COMMAND_SPORT_XMS_PROBE = "sport-xms-probe";
 

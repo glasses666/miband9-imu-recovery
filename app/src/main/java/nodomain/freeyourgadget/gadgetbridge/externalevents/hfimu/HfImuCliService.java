@@ -167,6 +167,8 @@ public class HfImuCliService extends Service {
             startPortProbe(intent, requestId, nonce);
         } else if (HfImuCliContract.COMMAND_IMU_CAPTURE.equals(command)) {
             startImuCapture(intent, requestId, nonce);
+        } else if (HfImuCliContract.COMMAND_FIND_BAND.equals(command)) {
+            startFindBand(intent, requestId, nonce);
         } else if (HfImuCliContract.COMMAND_GAMESIR_PROBE.equals(command)) {
             startGamesirProbe(intent, requestId, nonce);
         } else if (HfImuCliContract.COMMAND_SPORT_XMS_PROBE.equals(command)) {
@@ -718,6 +720,97 @@ public class HfImuCliService extends Service {
                 logImuCaptureFinal(result.connected ? "ok" : "error", result.connected ? "capture_complete" : "capture_failed", requestId, nonce, address, port, result.reason, result);
             }
         }, "HF IMU RFCOMM capture").start();
+    }
+
+    private void startFindBand(final Intent intent, final String requestId, final String nonce) {
+        final String address = valueOrEmpty(intent == null ? null : intent.getStringExtra(HfImuCliContract.EXTRA_ADDRESS)).toUpperCase();
+        final int durationMs = clamp(parseInt(intent == null ? null : intent.getStringExtra(HfImuCliContract.EXTRA_FIND_DURATION_MS), 3000), 250, 10000);
+        final GBDevice device = pickFindBandDevice(address);
+        if (device == null) {
+            final Map<String, String> fields = new LinkedHashMap<>();
+            fields.put("address", address);
+            fields.put("duration_ms", Integer.toString(durationMs));
+            fields.put("reason", address.length() > 0 ? "device_missing" : "initialized_device_missing");
+            logCommand(HfImuCliContract.LOG_TAG_ERROR, HfImuCliContract.COMMAND_FIND_BAND,
+                    "error", "find_failed", requestId, nonce, fields);
+            return;
+        }
+        final Map<String, String> fields = findBandFields(device, durationMs, address);
+        if (!device.isInitialized()) {
+            fields.put("reason", "device_not_initialized");
+            logCommand(HfImuCliContract.LOG_TAG_ERROR, HfImuCliContract.COMMAND_FIND_BAND,
+                    "error", "find_failed", requestId, nonce, fields);
+            return;
+        }
+        try {
+            GBApplication.deviceService(device).onFindDevice(true);
+            logCommand(HfImuCliContract.LOG_TAG_STATE, HfImuCliContract.COMMAND_FIND_BAND,
+                    "ok", "find_started", requestId, nonce, fields);
+        } catch (final Exception e) {
+            fields.put("reason", "start_" + e.getClass().getSimpleName());
+            logCommand(HfImuCliContract.LOG_TAG_ERROR, HfImuCliContract.COMMAND_FIND_BAND,
+                    "error", "find_failed", requestId, nonce, fields);
+            return;
+        }
+
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                final Map<String, String> stopFields = findBandFields(device, durationMs, address);
+                try {
+                    GBApplication.deviceService(device).onFindDevice(false);
+                    logCommand(HfImuCliContract.LOG_TAG_STATE, HfImuCliContract.COMMAND_FIND_BAND,
+                            "ok", "find_stopped", requestId, nonce, stopFields);
+                    logCommand(HfImuCliContract.LOG_TAG_STATE, HfImuCliContract.COMMAND_FIND_BAND,
+                            "ok", "find_complete", requestId, nonce, stopFields);
+                } catch (final Exception e) {
+                    stopFields.put("reason", "stop_" + e.getClass().getSimpleName());
+                    logCommand(HfImuCliContract.LOG_TAG_ERROR, HfImuCliContract.COMMAND_FIND_BAND,
+                            "error", "find_failed", requestId, nonce, stopFields);
+                }
+            }
+        }, durationMs);
+    }
+
+    private GBDevice pickFindBandDevice(final String requestedAddress) {
+        if (requestedAddress != null && requestedAddress.length() > 0) {
+            GBDevice device = GBApplication.app().getDeviceManager().getDeviceByAddress(requestedAddress);
+            if (device == null) {
+                device = DeviceHelper.getInstance().findAvailableDevice(requestedAddress, this);
+            }
+            return device;
+        }
+        final List<GBDevice> devices = GBApplication.app().getDeviceManager().getDevices();
+        if (devices == null) {
+            return null;
+        }
+        GBDevice fallback = null;
+        for (final GBDevice device : devices) {
+            if (device == null) {
+                continue;
+            }
+            if (fallback == null) {
+                fallback = device;
+            }
+            if (device.isInitialized()) {
+                return device;
+            }
+        }
+        return fallback;
+    }
+
+    private Map<String, String> findBandFields(final GBDevice device, final int durationMs, final String requestedAddress) {
+        final Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("requested_address", valueOrEmpty(requestedAddress));
+        fields.put("address", device == null ? "" : valueOrEmpty(device.getAddress()));
+        fields.put("name", device == null ? "" : valueOrEmpty(device.getName()));
+        fields.put("duration_ms", Integer.toString(durationMs));
+        if (device != null) {
+            fields.put("device_state", device.getState().name());
+            fields.put("state_ordinal", Integer.toString(device.getStateOrdinal()));
+            fields.put("initialized", Boolean.toString(device.isInitialized()));
+        }
+        return fields;
     }
 
     private ImuCaptureResult captureRfcomm(final BluetoothDevice device, final int port, final byte[] payload,

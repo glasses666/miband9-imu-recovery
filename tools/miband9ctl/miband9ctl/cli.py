@@ -818,6 +818,37 @@ def parse_port_probe_log(log_text: str) -> dict:
     }
 
 
+def parse_find_band_log(log_text: str) -> dict:
+    terminal = {}
+    started = {}
+    stopped = {}
+    for candidate in parse_structured_app_logs(log_text):
+        if candidate.get("command") != "find-band":
+            continue
+        message = candidate.get("message")
+        if message == "find_started":
+            started = candidate
+        elif message == "find_stopped":
+            stopped = candidate
+        elif message in {"find_complete", "find_failed", "unknown_command"}:
+            terminal = candidate
+    source = terminal or stopped or started
+    return {
+        "status": source.get("status", ""),
+        "message": source.get("message", ""),
+        "requested_address": source.get("requested_address", ""),
+        "address": source.get("address", ""),
+        "name": source.get("name", ""),
+        "duration_ms": parse_int_token(source.get("duration_ms"), 0),
+        "device_state": source.get("device_state", ""),
+        "state_ordinal": source.get("state_ordinal", ""),
+        "initialized": parse_bool_token(str(source.get("initialized", ""))),
+        "reason": source.get("reason", ""),
+        "started": bool(started),
+        "stopped": bool(stopped),
+    }
+
+
 def parse_imu_capture_log(log_text: str) -> dict:
     terminal = {}
     packets = []
@@ -1021,6 +1052,27 @@ def cmd_band_port_probe(args) -> Result:
     return result
 
 
+def cmd_band_find_band(args) -> Result:
+    duration_ms = max(250, min(int(args.duration_ms), 10000))
+    result = cmd_app_command(
+        args,
+        "find-band",
+        extras={
+            "address": (args.address or "").upper(),
+            "find_duration_ms": str(duration_ms),
+        },
+        wait_timeout=max(args.timeout, (duration_ms // 1000) + 10),
+        terminal_messages={"find_complete", "find_failed", "unknown_command"},
+    )
+    probe = parse_find_band_log(result.data.get("matching_app_log", ""))
+    result.command = "band find-band"
+    result.data["probe"] = probe
+    if result.ok and probe.get("message") != "find_complete":
+        result.ok = False
+        result.error = probe.get("message") or "find_band_not_completed"
+    return result
+
+
 def cmd_band_gamesir_probe(args) -> Result:
     seconds = max(1, min(int(args.seconds), 30))
     capture_ms = max(500, min(int(args.capture_ms), 30000))
@@ -1202,6 +1254,9 @@ def build_parser() -> argparse.ArgumentParser:
     band_port_probe.add_argument("--connect-timeout-ms", type=int, default=3000)
     band_port_probe.add_argument("--read-ms", type=int, default=750)
     band_port_probe.add_argument("--disconnect-first", dest="disconnect_first", action="store_true", default=False)
+    band_find_band = band_sub.add_parser("find-band")
+    band_find_band.add_argument("--address", default="")
+    band_find_band.add_argument("--duration-ms", type=int, default=3000)
     band_gamesir_probe = band_sub.add_parser("gamesir-probe")
     band_gamesir_probe.add_argument("--seconds", type=int, default=15)
     band_gamesir_probe.add_argument("--name", default="GameSir,Nova,Wireless")
@@ -1256,6 +1311,8 @@ def main(argv=None) -> int:
         result = cmd_band_connect(args)
     elif args.cmd == "band" and args.band_cmd == "port-probe":
         result = cmd_band_port_probe(args)
+    elif args.cmd == "band" and args.band_cmd == "find-band":
+        result = cmd_band_find_band(args)
     elif args.cmd == "band" and args.band_cmd == "gamesir-probe":
         result = cmd_band_gamesir_probe(args)
     elif args.cmd == "band" and args.band_cmd == "sport-xms-probe":

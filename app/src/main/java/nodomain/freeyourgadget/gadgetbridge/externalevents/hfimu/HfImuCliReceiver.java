@@ -64,6 +64,7 @@ public class HfImuCliReceiver extends BroadcastReceiver {
             case HfImuCliContract.COMMAND_CONNECT:
             case HfImuCliContract.COMMAND_PORT_PROBE:
             case HfImuCliContract.COMMAND_IMU_CAPTURE:
+            case HfImuCliContract.COMMAND_FIND_BAND:
             case HfImuCliContract.COMMAND_GAMESIR_PROBE:
             case HfImuCliContract.COMMAND_SPORT_XMS_PROBE:
                 startCliService(context, command, requestId, nonce, intent);
@@ -100,6 +101,7 @@ public class HfImuCliReceiver extends BroadcastReceiver {
             serviceIntent.putExtra(HfImuCliContract.EXTRA_PORT, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_PORT));
             serviceIntent.putExtra(HfImuCliContract.EXTRA_CAPTURE_MS, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_CAPTURE_MS));
             serviceIntent.putExtra(HfImuCliContract.EXTRA_MAX_PACKETS, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_MAX_PACKETS));
+            serviceIntent.putExtra(HfImuCliContract.EXTRA_FIND_DURATION_MS, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_FIND_DURATION_MS));
             serviceIntent.putExtra(HfImuCliContract.EXTRA_GAMESIR_HANDSHAKE, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_GAMESIR_HANDSHAKE));
             serviceIntent.putExtra(HfImuCliContract.EXTRA_GAMESIR_BOND, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_GAMESIR_BOND));
             serviceIntent.putExtra(HfImuCliContract.EXTRA_GAMESIR_HISTORICAL_010103, sourceIntent.getStringExtra(HfImuCliContract.EXTRA_GAMESIR_HISTORICAL_010103));
