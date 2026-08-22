@@ -1,0 +1,75 @@
+# Implementation Plan - RFCOMM IMU Activation
+
+The goal is to replicate the successful "Classic Bluetooth RFCOMM" capture by sending the "Golden Key" initialization command through Gadgetbridge's SPP connection.
+
+## User Review Required
+
+> [!IMPORTANT]
+> This plan requires the Mi Band 9 to be paired via **Classic Bluetooth** (not just BLE). The user must ensure the band is paired in Android Bluetooth settings before connecting in Gadgetbridge.
+
+> [!WARNING]
+> We are bypassing the standard [XiaomiSppProtocol](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppProtocolV1.java#33-127) (which uses `ba dc fe` preamble) to send a legacy/special `a5 a5` packet. This assumes the SPP channel is raw and accepts this format.
+
+## Proposed Changes
+
+### Gadgetbridge App
+
+#### [MODIFY] [MiBand9Coordinator.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/devices/xiaomi/watches/MiBand9Coordinator.java)
+- Change [getConnectionType()](file://<private-windows-artifacts>/2025-12/miband9-imu/gadgetbridge_src/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/devices/xiaomi/miband9/MiBand9Coordinator.java#45-49) to return `ConnectionType.OA_CLASSIC` (or `BT_CLASSIC` if available) to force SPP connection.
+- *Wait, Gadgetbridge might not have `OA_CLASSIC`, check `BT_CLASSIC`*
+
+#### [MODIFY] [XiaomiSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java)
+- Modify [onTestNewFunction](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java#283-311) to:
+    1.  Disconnect current SPP connection.
+    2.  Obtain [BluetoothDevice](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/btbr/AbstractBTBRDeviceSupport.java#107-112) object.
+    3.  Initiate `connectGatt` (AutoConnect = false).
+    4.  In `BluetoothGattCallback`, on connection state connected:
+        - Wait 2 seconds.
+        - Disconnect.
+        - Toast "Now Go Scan in System Settings!".
+
+## Verification Plan
+#### [MODIFY] [XiaomiConnectionSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiConnectionSupport.java)
+- Add abstract method [sendRawBytes(byte[] bytes, @Nullable XiaomiSendCallback callback)](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiBleSupport.java#155-159).
+
+#### [MODIFY] [XiaomiSppSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppSupport.java)
+- Implement [sendRawBytes](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiBleSupport.java#155-159) to bypass `mProtocol.encodePacket` and write directly to `commsSupport`.
+
+#### [MODIFY] [XiaomiBleSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiBleSupport.java)
+- Implement [sendRawBytes](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiBleSupport.java#155-159) (can be a no-op or log error for now, as we focus on SPP).
+
+#### [MODIFY] [XiaomiSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java)
+- Define `CMD_INIT` constant with the `a5a5...` hex string.
+- Update [onTestNewFunction()](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java#283-311) to:
+    - Log "Sending RFCOMM Init...".
+    - Call [getConnectionSpecificSupport().sendRawBytes(CMD_INIT, null)](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSupport.java#135-142).
+    - Show Toast.
+- Inject the "Golden Key" `CMD_INIT` in XiaomiSupport to trigger IMU stream.
+
+## Phase 3: Direct RFCOMM Channel (Channel 5)
+
+### [MODIFY] [BtBRQueue.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/btbr/BtBRQueue.java)
+- Add `private int mPort = -1` and support for it in constructor.
+- In [connect()](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiBleSupport.java#199-203), if `mPort > 0`, use reflection to call `btDevice.createRfcommSocket(mPort)`.
+
+### [MODIFY] [XiaomiSppSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppSupport.java)
+- Update `commsSupport` instantiation to pass port `5` (or a dynamic port from coordinator).
+
+## Phase 4: PC-Side Forwarding & Heartbeat (Current)
+
+### [MODIFY] [XiaomiSppSupport.java](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiSppSupport.java)
+- [ ] **Data Forwarding**: Ensure `MI_IMU_RAW_RX` logs all incoming bytes (verified).
+- [ ] **Heartbeat**: Implement a [Handler](file://<private-windows-artifacts>/2025-12/miband9-imu-android/gadgetbridge/app/src/main/java/nodomain/freeyourgadget/gadgetbridge/service/devices/xiaomi/XiaomiChannelHandler.java#19-31) to send a keep-alive packet every ~1-2 seconds.
+    - *Strategy*: Since exact heartbeat is unknown, try re-sending a safe "Ping" or the Init command if stream dies.
+    - *User Request*: "Heartbeat function needs to be perfected".
+
+### [NEW] [live_imu_forwarder.py](file://<private-agent-workspace>/live_imu_forwarder.py)
+- [ ] Script to run `adb logcat | grep MI_IMU_RAW_RX`.
+- [ ] Parse `A5 A5` packets stream-wise.
+- [ ] Decode and print Accel/Gyro values in terminal.
+
+## Phase 5: Verification
+1. Install updated APK.
+2. Run [live_imu_forwarder.py](file://<private-agent-workspace>/live_imu_forwarder.py) on PC.
+3. Click "Test New Function" on Phone.
+4. Verify data scrolling on PC terminal.

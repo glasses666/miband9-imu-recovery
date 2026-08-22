@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:padding="16dp"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <TextView
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_gravity="center_horizontal"
+            android:paddingBottom="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Real-time IMU Data (Channel 5)"/>
+        <TextView
+            android:textSize="14sp"
+            android:id="@+id/tv_imu_stats"
+            android:paddingBottom="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Status: Waiting for data..."
+            android:fontFamily="monospace"/>
+        <TextView
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Accelerometer"/>
+        <TextView
+            android:textSize="18sp"
+            android:id="@+id/tv_accel_data"
+            android:background="#20000000"
+            android:padding="8dp"
+            android:paddingBottom="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="X: --\10Y: --\10Z: --"
+            android:fontFamily="monospace"/>
+        <TextView
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:paddingTop="8dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Gyroscope"/>
+        <TextView
+            android:textSize="18sp"
+            android:id="@+id/tv_gyro_data"
+            android:background="#20000000"
+            android:padding="8dp"
+            android:paddingBottom="8dp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="X: --\10Y: --\10Z: --"
+            android:fontFamily="monospace"/>
+        <TextView
+            android:textStyle="bold"
+            android:paddingTop="16dp"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Raw Payload (Last Packet):"/>
+        <TextView
+            android:textSize="10sp"
+            android:id="@+id/tv_raw_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="--"
+            android:maxLines="5"
+            android:fontFamily="monospace"/>
+    </LinearLayout>
+</ScrollView>

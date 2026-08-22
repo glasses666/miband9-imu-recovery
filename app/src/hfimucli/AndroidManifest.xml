@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!-- Headless build: keep the legacy UI classes in the APK for now, but remove
+             the launcher entry so the phone-side path is command/service driven. -->
+        <activity
+            android:name=".activities.ControlCenterv2"
+            android:enabled="false"
+            tools:replace="android:enabled" />
+
+        <receiver
+            android:name=".externalevents.hfimu.HfImuCliReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="${hfImuCliAction}" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".externalevents.hfimu.HfImuCliService"
+            android:enabled="true"
+            android:exported="false" />
+    </application>
+</manifest>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pebble_content_provider">nodomain.freeyourgadget.gadgetbridge.hfimucli.pebble.provider</string>
+    <string name="app_name">Gadgetbridge HF IMU CLI</string>
+    <string name="title_activity_controlcenter">Gadgetbridge HF IMU CLI</string>
+</resources>
